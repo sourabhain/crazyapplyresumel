@@ -1,9 +1,14 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import StepIndicator from './StepIndicator';
 import StepContent from './StepContent';
 import NavigationButtons from './NavigationButtons';
 import { toast } from 'sonner';
+import { processStep, generateFinalResume } from '@/utils/openaiService';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Copy, Download } from 'lucide-react';
 
 // Define the step prompts
 const STEPS = [
@@ -89,6 +94,11 @@ const ResumeWizard = () => {
   });
   
   const [outputs, setOutputs] = useState<FormData>({});
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [finalResume, setFinalResume] = useState("");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(true);
+  const [autoProcess, setAutoProcess] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -100,72 +110,233 @@ const ResumeWizard = () => {
     }
   };
 
-  const handleNext = () => {
-    if (currentStep < STEPS.length) {
-      // In a real app, we would process the input and generate an output here
-      // For this demo, we'll simulate an output based on the input
-      
-      // Example output generation - in a real app, this would call an AI service
-      if (currentStep === 1 && formData.jobDescription) {
-        setOutputs(prev => ({
-          ...prev,
-          jobDescription: `
-Key Responsibilities:
-1. Lead product strategy and roadmap development
-2. Conduct market research and competitive analysis
-3. Collaborate with engineering and design teams
-4. Prioritize features based on business impact
-5. Define and track product metrics
+  const processCurrentStep = async () => {
+    if (!apiKey) {
+      toast.error("Please enter your OpenAI API key first");
+      return false;
+    }
 
-Key Qualifications:
-1. 5+ years in product management
-2. Experience with agile methodologies
-3. Strong analytical and problem-solving skills
-4. Excellent communication and stakeholder management
-5. Technical background or ability to work with technical teams
-          `
-        }));
-      }
-      
-      setCurrentStep(prev => prev + 1);
+    const currentStepData = STEPS[currentStep - 1];
+    const currentInput = formData[currentStepData.fieldName];
+
+    if (!currentInput) {
+      toast.error("Please enter some text before proceeding");
+      return false;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await processStep({
+        apiKey,
+        stepNumber: currentStep,
+        stepTitle: currentStepData.title,
+        jobDescription: formData.jobDescription,
+        resumeText: formData.resume,
+        currentInput,
+        previousOutputs: outputs
+      });
+
+      setOutputs(prev => ({
+        ...prev,
+        [currentStepData.fieldName]: result
+      }));
+
       toast.success(`Step ${currentStep} completed!`);
+      return true;
+    } catch (error) {
+      console.error("Error processing step:", error);
+      toast.error(`Error: ${error instanceof Error ? error.message : "Failed to process step"}`);
+      return false;
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleNext = async () => {
+    if (currentStep < STEPS.length) {
+      const success = await processCurrentStep();
+      if (success) {
+        setCurrentStep(prev => prev + 1);
+      }
     } else {
-      // Complete the wizard
-      toast.success("Resume optimization complete!");
-      // Here we would compile all the inputs/outputs into a final resume
+      // Generate final resume
+      setIsProcessing(true);
+      try {
+        const finalResumeText = await generateFinalResume(
+          apiKey,
+          formData.jobDescription,
+          outputs
+        );
+        setFinalResume(finalResumeText);
+        toast.success("Resume optimization complete!");
+      } catch (error) {
+        console.error("Error generating final resume:", error);
+        toast.error(`Error: ${error instanceof Error ? error.message : "Failed to generate final resume"}`);
+      } finally {
+        setIsProcessing(false);
+      }
     }
   };
 
   const handleSave = () => {
-    // In a real app, this would save the current progress
+    localStorage.setItem('resumeWizardData', JSON.stringify({ formData, outputs, currentStep, apiKey }));
     toast.success("Progress saved!");
   };
 
+  const handleCopyFinalResume = () => {
+    navigator.clipboard.writeText(finalResume);
+    toast.success("Copied to clipboard!");
+  };
+
+  const handleDownloadFinalResume = () => {
+    const blob = new Blob([finalResume], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'optimized-resume.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Resume downloaded!");
+  };
+
+  // Load saved data from localStorage on initial load
+  useEffect(() => {
+    const savedData = localStorage.getItem('resumeWizardData');
+    if (savedData) {
+      try {
+        const { formData: savedFormData, outputs: savedOutputs, currentStep: savedStep, apiKey: savedApiKey } = JSON.parse(savedData);
+        setFormData(savedFormData);
+        setOutputs(savedOutputs);
+        setCurrentStep(savedStep);
+        setApiKey(savedApiKey || "");
+        if (savedApiKey) {
+          setShowApiKeyInput(false);
+        }
+      } catch (e) {
+        console.error("Error loading saved data:", e);
+      }
+    }
+  }, []);
+
+  // Auto-process steps when enabled and input changes
+  useEffect(() => {
+    if (autoProcess && apiKey && !isProcessing && currentStep < STEPS.length) {
+      const currentStepData = STEPS[currentStep - 1];
+      if (formData[currentStepData.fieldName]) {
+        const timeoutId = setTimeout(() => {
+          processCurrentStep().then(success => {
+            if (success) {
+              setCurrentStep(prev => prev + 1);
+            }
+          });
+        }, 1500); // Delay to allow typing to finish
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [formData, autoProcess, apiKey, currentStep, isProcessing]);
+
   const currentStepData = STEPS[currentStep - 1];
-  const canProceed = !!formData[currentStepData.fieldName];
+  const canProceed = !!formData[currentStepData.fieldName] && !!apiKey;
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 space-y-6">
-      <StepIndicator currentStep={currentStep} totalSteps={STEPS.length} />
+      {showApiKeyInput ? (
+        <Card className="p-4">
+          <CardContent className="p-0 pt-4">
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <label htmlFor="apiKey" className="text-sm font-medium">OpenAI API Key</label>
+                <Input
+                  id="apiKey"
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Enter your OpenAI API key"
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Your API key is stored only in your browser's local storage and is never sent to our servers.
+                </p>
+              </div>
+              <Button 
+                onClick={() => setShowApiKeyInput(false)} 
+                disabled={!apiKey}
+                className="w-full"
+              >
+                Save API Key
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex justify-between items-center">
+          <Button variant="outline" size="sm" onClick={() => setShowApiKeyInput(true)}>
+            Change API Key
+          </Button>
+          <div className="flex items-center gap-2">
+            <label htmlFor="autoProcess" className="text-sm font-medium">Auto-Process</label>
+            <input
+              type="checkbox"
+              id="autoProcess"
+              checked={autoProcess}
+              onChange={(e) => setAutoProcess(e.target.checked)}
+              className="rounded text-primary focus:ring-primary"
+            />
+          </div>
+        </div>
+      )}
       
-      <StepContent
-        stepNumber={currentStep}
-        title={currentStepData.title}
-        description={currentStepData.description}
-        inputValue={formData[currentStepData.fieldName] || ""}
-        onChange={(value) => handleInputChange(currentStepData.fieldName, value)}
-        placeholder={currentStepData.placeholder}
-        outputValue={outputs[currentStepData.fieldName]}
-      />
+      <StepIndicator currentStep={currentStep} totalSteps={STEPS.length} isProcessing={isProcessing} />
       
-      <NavigationButtons
-        currentStep={currentStep}
-        totalSteps={STEPS.length}
-        onPrevious={handlePrevious}
-        onNext={handleNext}
-        onSave={handleSave}
-        canProceed={canProceed}
-      />
+      {finalResume ? (
+        <Card className="w-full">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">Your Optimized Resume</h3>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={handleCopyFinalResume}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy
+                </Button>
+                <Button size="sm" onClick={handleDownloadFinalResume}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              </div>
+            </div>
+            <div className="whitespace-pre-wrap border p-4 rounded-md bg-secondary/20 max-h-[600px] overflow-y-auto">
+              {finalResume}
+            </div>
+            <Button onClick={() => setFinalResume("")} variant="outline" className="w-full">
+              Back to Steps
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <StepContent
+            stepNumber={currentStep}
+            title={currentStepData.title}
+            description={currentStepData.description}
+            inputValue={formData[currentStepData.fieldName] || ""}
+            onChange={(value) => handleInputChange(currentStepData.fieldName, value)}
+            placeholder={currentStepData.placeholder}
+            outputValue={outputs[currentStepData.fieldName]}
+          />
+          
+          <NavigationButtons
+            currentStep={currentStep}
+            totalSteps={STEPS.length}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onSave={handleSave}
+            canProceed={canProceed}
+          />
+        </>
+      )}
     </div>
   );
 };
