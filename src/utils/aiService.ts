@@ -49,7 +49,7 @@ Current Professional Summary:
 ${resumeText}`;
         break;
       case "currentJob":
-        prompt = `Rewrite this current role experience in present tense, using "Accomplished X as measured by Y doing Z" format. Each bullet point max 2 lines. Emphasize growth, leadership, and outcomes relevant to the job.
+        prompt = `Rewrite this current role experience in present tense, using "Accomplished X as measured by Y doing Z" format. Create EXACTLY 5 bullet points, each max 2 lines. Emphasize growth, leadership, and outcomes relevant to the job.
 
 Job Description:
 ${jobDescription}
@@ -58,7 +58,7 @@ Current Role:
 ${resumeText}`;
         break;
       case "previousJob":
-        prompt = `Rewrite this previous role experience in past tense, focusing on top 4 impactful accomplishments using "Accomplished X as measured by Y doing Z" format. Each bullet point max 2 lines. Align with job requirements.
+        prompt = `Rewrite this previous role experience in past tense, focusing on EXACTLY 4 impactful accomplishments using "Accomplished X as measured by Y doing Z" format. Each bullet point max 2 lines. Align with job requirements.
 
 Job Description:
 ${jobDescription}
@@ -77,6 +77,9 @@ ${resumeText}`;
         break;
       case "all":
         prompt = `Optimize this entire resume to match the job description. Rewrite the professional summary and all job experiences using "Accomplished X as measured by Y doing Z" format where appropriate. Make it ATS-friendly with relevant keywords. Format each section clearly.
+
+For the current role, provide EXACTLY 5 bullet points.
+For previous roles, provide EXACTLY 4 bullet points each.
 
 Job Description:
 ${jobDescription}

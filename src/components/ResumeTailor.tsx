@@ -1,12 +1,12 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Loader2, Copy, Download } from 'lucide-react';
+import { Loader2, Copy, Download, FileText } from 'lucide-react';
 import { processResume, generateFullResume } from '@/utils/aiService';
+import { generateWordDocument } from '@/utils/wordExport';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -65,7 +65,6 @@ const ResumeTailor = () => {
           setOptimizedEarlierJob(result);
           break;
         case "all":
-          // Process all sections at once
           setFinalResume(result);
           break;
       }
@@ -136,11 +135,15 @@ const ResumeTailor = () => {
     toast.success(`Downloaded as ${filename}`);
   };
   
+  const handleDownloadAsWord = (text: string) => {
+    generateWordDocument(text);
+    toast.success("Downloaded as Word document");
+  };
+  
   const handleOptimizeAll = async () => {
     await handleProcessSection("all");
   };
   
-  // Save progress to localStorage
   const saveProgress = () => {
     const data = {
       resumeText,
@@ -157,7 +160,6 @@ const ResumeTailor = () => {
     toast.success("Progress saved!");
   };
   
-  // Load progress from localStorage
   React.useEffect(() => {
     const savedData = localStorage.getItem('resumeTailorData');
     if (savedData) {
@@ -480,7 +482,14 @@ const ResumeTailor = () => {
                   size="sm" 
                   onClick={() => handleDownload(finalResume, "optimized-resume.txt")}
                 >
-                  <Download className="h-4 w-4 mr-1" /> Download
+                  <Download className="h-4 w-4 mr-1" /> Download TXT
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="secondary"
+                  onClick={() => handleDownloadAsWord(finalResume)}
+                >
+                  <FileText className="h-4 w-4 mr-1" /> Download DOC
                 </Button>
               </div>
             </CardTitle>

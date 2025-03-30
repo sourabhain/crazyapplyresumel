@@ -10,7 +10,7 @@ const Index = () => {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Logo />
-          <h1 className="text-lg font-medium text-gray-600">Resume Tailoring Assistant</h1>
+          <h1 className="text-lg font-medium text-gray-600">Crazy Apply AI Resume Builder</h1>
         </div>
       </header>
       
@@ -28,7 +28,7 @@ const Index = () => {
       <footer className="bg-white border-t border-gray-200 mt-12">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
           <p className="text-center text-gray-500 text-sm">
-            Resume Optimus Helper © {new Date().getFullYear()} - Resume optimization tool powered by AI
+            Crazy Apply AI Resume Builder © {new Date().getFullYear()} - Resume optimization tool powered by AI
           </p>
         </div>
       </footer>
