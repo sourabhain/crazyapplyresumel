@@ -1,181 +1,45 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import { Loader2, Copy, Download, FileText } from 'lucide-react';
-import { processResume, generateFullResume } from '@/utils/aiService';
-import { generateWordDocument } from '@/utils/wordExport';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Label } from '@/components/ui/label';
 
-const ResumeTailor = () => {
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Download, Copy, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { generateOptimizedResume } from '@/utils/aiService';
+import { generateWordDocument } from '@/utils/wordExport';
+import { useAuth } from '@/context/AuthContext';
+import { saveResumeToHistory } from '@/utils/resumeHistoryService';
+import LoginForm from '@/components/LoginForm';
+import UserProfile from '@/components/UserProfile';
+import ResumeHistoryList from '@/components/ResumeHistoryList';
+
+const ResumeTailor: React.FC = () => {
+  const { user } = useAuth();
   const [resumeText, setResumeText] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [apiProvider, setApiProvider] = useState<"openai" | "deepseek">("openai");
+  const [optimizedResume, setOptimizedResume] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyInput, setShowApiKeyInput] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const [optimizedSummary, setOptimizedSummary] = useState('');
-  const [optimizedCurrentJob, setOptimizedCurrentJob] = useState('');
-  const [optimizedPreviousJob, setOptimizedPreviousJob] = useState('');
-  const [optimizedEarlierJob, setOptimizedEarlierJob] = useState('');
-  const [finalResume, setFinalResume] = useState('');
-  
-  const handleProcessSection = async (section: "summary" | "currentJob" | "previousJob" | "earlierJob" | "all") => {
-    if (!apiKey) {
-      toast.error("Please enter your API key first");
-      return;
-    }
-    
-    if (!jobDescription) {
-      toast.error("Please enter a job description");
-      return;
-    }
-    
-    if (!resumeText) {
-      toast.error("Please enter your resume");
-      return;
-    }
-    
-    setIsProcessing(true);
-    try {
-      const result = await processResume({
-        apiKey,
-        apiProvider,
-        jobDescription,
-        resumeText,
-        section
-      });
-      
-      switch (section) {
-        case "summary":
-          setOptimizedSummary(result);
-          break;
-        case "currentJob":
-          setOptimizedCurrentJob(result);
-          break;
-        case "previousJob":
-          setOptimizedPreviousJob(result);
-          break;
-        case "earlierJob":
-          setOptimizedEarlierJob(result);
-          break;
-        case "all":
-          setFinalResume(result);
-          break;
-      }
-      
-      toast.success(`${section === "all" ? "Full resume" : section.charAt(0).toUpperCase() + section.slice(1)} optimized successfully!`);
-    } catch (error) {
-      console.error("Error processing section:", error);
-      toast.error(`Error: ${error instanceof Error ? error.message : "Failed to process"}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const handleGenerateFinalResume = async () => {
-    if (!apiKey) {
-      toast.error("Please enter your API key first");
-      return;
-    }
-    
-    if (!jobDescription || !resumeText) {
-      toast.error("Please enter both job description and resume");
-      return;
-    }
-    
-    if (!optimizedSummary && !optimizedCurrentJob && !optimizedPreviousJob && !optimizedEarlierJob) {
-      toast.error("Please optimize at least one section first");
-      return;
-    }
-    
-    setIsProcessing(true);
-    try {
-      const result = await generateFullResume(
-        apiKey,
-        apiProvider,
-        jobDescription,
-        resumeText,
-        {
-          summary: optimizedSummary,
-          currentJob: optimizedCurrentJob,
-          previousJob: optimizedPreviousJob,
-          earlierJob: optimizedEarlierJob
-        }
-      );
-      
-      setFinalResume(result);
-      toast.success("Final resume generated successfully!");
-    } catch (error) {
-      console.error("Error generating final resume:", error);
-      toast.error(`Error: ${error instanceof Error ? error.message : "Failed to generate final resume"}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-  
-  const handleCopyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard!");
-  };
-  
-  const handleDownload = (text: string, filename: string) => {
-    const element = document.createElement("a");
-    const file = new Blob([text], { type: "text/plain" });
-    element.href = URL.createObjectURL(file);
-    element.download = filename;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-    toast.success(`Downloaded as ${filename}`);
-  };
-  
-  const handleDownloadAsWord = (text: string) => {
-    generateWordDocument(text);
-    toast.success("Downloaded as Word document");
-  };
-  
-  const handleOptimizeAll = async () => {
-    await handleProcessSection("all");
-  };
-  
-  const saveProgress = () => {
-    const data = {
-      resumeText,
-      jobDescription,
-      apiKey,
-      apiProvider,
-      optimizedSummary,
-      optimizedCurrentJob,
-      optimizedPreviousJob,
-      optimizedEarlierJob,
-      finalResume
-    };
-    localStorage.setItem('resumeTailorData', JSON.stringify(data));
-    toast.success("Progress saved!");
-  };
-  
-  React.useEffect(() => {
+  const [selectedProvider, setSelectedProvider] = useState('openai');
+  const [optimizationOption, setOptimizationOption] = useState('full');
+  const [showHistoryList, setShowHistoryList] = useState(false);
+  const [resumeTitle, setResumeTitle] = useState('');
+
+  // Load saved data from localStorage on initial load
+  useEffect(() => {
     const savedData = localStorage.getItem('resumeTailorData');
     if (savedData) {
       try {
-        const parsedData = JSON.parse(savedData);
-        setResumeText(parsedData.resumeText || '');
-        setJobDescription(parsedData.jobDescription || '');
-        setApiKey(parsedData.apiKey || '');
-        setApiProvider(parsedData.apiProvider || 'openai');
-        setOptimizedSummary(parsedData.optimizedSummary || '');
-        setOptimizedCurrentJob(parsedData.optimizedCurrentJob || '');
-        setOptimizedPreviousJob(parsedData.optimizedPreviousJob || '');
-        setOptimizedEarlierJob(parsedData.optimizedEarlierJob || '');
-        setFinalResume(parsedData.finalResume || '');
-        
-        if (parsedData.apiKey) {
+        const { resumeText: savedResume, jobDescription: savedJob, apiKey: savedApiKey, provider: savedProvider } = JSON.parse(savedData);
+        setResumeText(savedResume || '');
+        setJobDescription(savedJob || '');
+        setApiKey(savedApiKey || '');
+        setSelectedProvider(savedProvider || 'openai');
+        if (savedApiKey) {
           setShowApiKeyInput(false);
         }
       } catch (e) {
@@ -183,329 +47,294 @@ const ResumeTailor = () => {
       }
     }
   }, []);
-  
+
+  // Save data to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('resumeTailorData', JSON.stringify({
+      resumeText,
+      jobDescription,
+      apiKey,
+      provider: selectedProvider
+    }));
+  }, [resumeText, jobDescription, apiKey, selectedProvider]);
+
+  const handleGenerate = async () => {
+    if (!resumeText || !jobDescription) {
+      toast.error("Please enter both your resume and the job description");
+      return;
+    }
+
+    if (!apiKey) {
+      toast.error("Please enter your API key");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const optimized = await generateOptimizedResume({
+        apiKey,
+        resumeText,
+        jobDescription,
+        provider: selectedProvider,
+        optimizationOption
+      });
+      
+      setOptimizedResume(optimized);
+      
+      // Generate a title for the resume based on job description
+      const jobTitle = extractJobTitle(jobDescription);
+      setResumeTitle(jobTitle);
+      
+      toast.success("Resume successfully optimized!");
+      
+      // Save to history if user is logged in
+      if (user) {
+        await saveResumeToHistory(user.uid, optimized, jobDescription, jobTitle);
+      }
+    } catch (error) {
+      console.error("Error generating optimized resume:", error);
+      toast.error(`Error: ${error instanceof Error ? error.message : "Failed to optimize resume"}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const extractJobTitle = (jobDesc: string): string => {
+    // Try to extract a job title from the first few lines of the job description
+    const lines = jobDesc.split('\n').slice(0, 5);
+    
+    // Look for lines that might contain job titles (typically in the first few lines)
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      // If line is short, capitalized, and doesn't end with punctuation, it's likely a title
+      if (trimmedLine.length > 0 && 
+          trimmedLine.length < 50 && 
+          !trimmedLine.endsWith('.') &&
+          !trimmedLine.endsWith(':')) {
+        return trimmedLine;
+      }
+    }
+    
+    return "Optimized Resume";
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(optimizedResume);
+    toast.success("Copied to clipboard!");
+  };
+
+  const handleDownloadWord = () => {
+    generateWordDocument(optimizedResume);
+    toast.success("Word document downloaded!");
+  };
+
+  const handleReset = () => {
+    setOptimizedResume('');
+  };
+
   return (
-    <div className="container mx-auto py-8 space-y-6">
-      {showApiKeyInput ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>API Configuration</CardTitle>
-            <CardDescription>Enter your API key to get started</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>API Provider</Label>
-              <RadioGroup 
-                defaultValue={apiProvider} 
-                onValueChange={(value) => setApiProvider(value as "openai" | "deepseek")}
-                className="flex gap-4"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="openai" id="openai" />
-                  <Label htmlFor="openai">OpenAI</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="deepseek" id="deepseek" />
-                  <Label htmlFor="deepseek">DeepSeek</Label>
-                </div>
-              </RadioGroup>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">
-                {apiProvider === "openai" ? "OpenAI API Key" : "DeepSeek API Key"}
-              </Label>
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        {user ? (
+          <UserProfile onShowHistory={() => setShowHistoryList(true)} />
+        ) : (
+          <div></div> // Empty div for spacing when user is not logged in
+        )}
+        
+        <div className="flex items-center gap-2">
+          {showApiKeyInput ? (
+            <div className="flex gap-2">
               <Input
-                id="apiKey"
                 type="password"
-                placeholder={`Enter your ${apiProvider === "openai" ? "OpenAI" : "DeepSeek"} API key`}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter your API key"
+                className="max-w-xs"
               />
-              <p className="text-xs text-muted-foreground">
-                Your API key is stored only in your browser's local storage and is never sent to our servers.
-              </p>
+              <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="deepseek">DeepSeek</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowApiKeyInput(false)} 
+                disabled={!apiKey}
+              >
+                Save
+              </Button>
             </div>
-            
-            <Button onClick={() => setShowApiKeyInput(false)} disabled={!apiKey}>
-              Save API Key
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setShowApiKeyInput(true)}>
+              Change API Key
             </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex justify-between">
-          <Button variant="outline" onClick={() => setShowApiKeyInput(true)}>
-            Change API Configuration
-          </Button>
-          <Button variant="outline" onClick={saveProgress}>
-            Save Progress
-          </Button>
+          )}
         </div>
-      )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Job Description</CardTitle>
-            <CardDescription>Paste the job description you're applying for</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Paste job description here..."
-              className="min-h-[200px]"
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-            />
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Your Resume</CardTitle>
-            <CardDescription>Paste your current resume</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Paste your current resume here..."
-              className="min-h-[200px]"
-              value={resumeText}
-              onChange={(e) => setResumeText(e.target.value)}
-            />
-          </CardContent>
-        </Card>
       </div>
       
-      <div className="flex gap-4 justify-center">
-        <Button 
-          onClick={handleOptimizeAll} 
-          disabled={!apiKey || !jobDescription || !resumeText || isProcessing}
-          className="w-full md:w-auto"
-        >
-          {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Optimize Full Resume
-        </Button>
-      </div>
-      
-      {!finalResume && (
-        <Tabs defaultValue="summary" className="w-full">
-          <TabsList className="grid grid-cols-4 mb-4">
-            <TabsTrigger value="summary">Professional Summary</TabsTrigger>
-            <TabsTrigger value="currentJob">Current Job</TabsTrigger>
-            <TabsTrigger value="previousJob">Previous Job</TabsTrigger>
-            <TabsTrigger value="earlierJob">Earlier Job</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="summary">
-            <Card>
-              <CardHeader>
-                <CardTitle>Professional Summary</CardTitle>
-                <CardDescription>Optimize your professional summary to match the job description</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  onClick={() => handleProcessSection("summary")} 
-                  disabled={!apiKey || !jobDescription || !resumeText || isProcessing}
-                >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Optimize Summary
-                </Button>
-                
-                {optimizedSummary && (
-                  <div className="border rounded-md p-4 bg-secondary/20">
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-medium">Optimized Summary:</h3>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleCopyToClipboard(optimizedSummary)}
-                        >
-                          <Copy className="h-4 w-4 mr-1" /> Copy
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="whitespace-pre-wrap">{optimizedSummary}</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="currentJob">
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Job</CardTitle>
-                <CardDescription>Optimize your current job experience</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  onClick={() => handleProcessSection("currentJob")} 
-                  disabled={!apiKey || !jobDescription || !resumeText || isProcessing}
-                >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Optimize Current Job
-                </Button>
-                
-                {optimizedCurrentJob && (
-                  <div className="border rounded-md p-4 bg-secondary/20">
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-medium">Optimized Current Job:</h3>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleCopyToClipboard(optimizedCurrentJob)}
-                        >
-                          <Copy className="h-4 w-4 mr-1" /> Copy
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="whitespace-pre-wrap">{optimizedCurrentJob}</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="previousJob">
-            <Card>
-              <CardHeader>
-                <CardTitle>Previous Job</CardTitle>
-                <CardDescription>Optimize your previous job experience</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  onClick={() => handleProcessSection("previousJob")} 
-                  disabled={!apiKey || !jobDescription || !resumeText || isProcessing}
-                >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Optimize Previous Job
-                </Button>
-                
-                {optimizedPreviousJob && (
-                  <div className="border rounded-md p-4 bg-secondary/20">
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-medium">Optimized Previous Job:</h3>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleCopyToClipboard(optimizedPreviousJob)}
-                        >
-                          <Copy className="h-4 w-4 mr-1" /> Copy
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="whitespace-pre-wrap">{optimizedPreviousJob}</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="earlierJob">
-            <Card>
-              <CardHeader>
-                <CardTitle>Earlier Job</CardTitle>
-                <CardDescription>Optimize your earlier job experience</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  onClick={() => handleProcessSection("earlierJob")} 
-                  disabled={!apiKey || !jobDescription || !resumeText || isProcessing}
-                >
-                  {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Optimize Earlier Job
-                </Button>
-                
-                {optimizedEarlierJob && (
-                  <div className="border rounded-md p-4 bg-secondary/20">
-                    <div className="flex justify-between mb-2">
-                      <h3 className="font-medium">Optimized Earlier Job:</h3>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleCopyToClipboard(optimizedEarlierJob)}
-                        >
-                          <Copy className="h-4 w-4 mr-1" /> Copy
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="whitespace-pre-wrap">{optimizedEarlierJob}</div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
-      
-      {(optimizedSummary || optimizedCurrentJob || optimizedPreviousJob || optimizedEarlierJob) && !finalResume && (
-        <Card>
+      {showHistoryList ? (
+        <ResumeHistoryList onClose={() => setShowHistoryList(false)} />
+      ) : optimizedResume ? (
+        <Card className="w-full">
           <CardHeader>
-            <CardTitle>Generate Final Resume</CardTitle>
-            <CardDescription>Combine all optimized sections into a final resume</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button 
-              onClick={handleGenerateFinalResume} 
-              disabled={
-                isProcessing || 
-                !apiKey || 
-                !jobDescription || 
-                !resumeText || 
-                (!optimizedSummary && !optimizedCurrentJob && !optimizedPreviousJob && !optimizedEarlierJob)
-              }
-            >
-              {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Generate Final Resume
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-      
-      {finalResume && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex justify-between">
-              <span>Your Optimized Resume</span>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleCopyToClipboard(finalResume)}
-                >
-                  <Copy className="h-4 w-4 mr-1" /> Copy
-                </Button>
-                <Button 
-                  size="sm" 
-                  onClick={() => handleDownload(finalResume, "optimized-resume.txt")}
-                >
-                  <Download className="h-4 w-4 mr-1" /> Download TXT
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="secondary"
-                  onClick={() => handleDownloadAsWord(finalResume)}
-                >
-                  <FileText className="h-4 w-4 mr-1" /> Download DOC
-                </Button>
-              </div>
-            </CardTitle>
+            <CardTitle>Your Optimized Resume</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-md p-4 bg-secondary/20 max-h-[600px] overflow-y-auto whitespace-pre-wrap">
-              {finalResume}
+            <div className="whitespace-pre-wrap border p-4 rounded-md bg-secondary/20 max-h-[600px] overflow-y-auto">
+              {optimizedResume}
             </div>
-            <Button 
-              variant="outline" 
-              onClick={() => setFinalResume('')} 
-              className="mt-4"
-            >
-              Back to Sections
-            </Button>
           </CardContent>
+          <CardFooter className="flex justify-between">
+            <Button variant="outline" onClick={handleReset}>
+              Back
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCopy}>
+                <Copy className="h-4 w-4 mr-2" />
+                Copy
+              </Button>
+              <Button onClick={handleDownloadWord}>
+                <Download className="h-4 w-4 mr-2" />
+                Download DOC
+              </Button>
+              {!user && (
+                <Button variant="secondary" onClick={() => setShowHistoryList(true)}>
+                  Sign in to Save
+                </Button>
+              )}
+            </div>
+          </CardFooter>
+        </Card>
+      ) : !user ? (
+        <div className="grid gap-8 grid-cols-1 md:grid-cols-2">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Step 1: Enter Your Resume & Job Description</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="resume" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="resume">Resume</TabsTrigger>
+                    <TabsTrigger value="job">Job Description</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="resume" className="space-y-4">
+                    <Textarea
+                      value={resumeText}
+                      onChange={(e) => setResumeText(e.target.value)}
+                      placeholder="Paste your current resume here..."
+                      className="min-h-[300px]"
+                    />
+                  </TabsContent>
+                  <TabsContent value="job" className="space-y-4">
+                    <Textarea
+                      value={jobDescription}
+                      onChange={(e) => setJobDescription(e.target.value)}
+                      placeholder="Paste the job description here..."
+                      className="min-h-[300px]"
+                    />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+              <CardFooter>
+                <div className="w-full space-y-4">
+                  <Select value={optimizationOption} onValueChange={setOptimizationOption}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="What to optimize?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">Full Resume Optimization</SelectItem>
+                      <SelectItem value="summary">Professional Summary Only</SelectItem>
+                      <SelectItem value="experience">Work Experience Only</SelectItem>
+                      <SelectItem value="skills">Skills Section Only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleGenerate} 
+                    disabled={isLoading || !resumeText || !jobDescription || !apiKey}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Optimizing...
+                      </>
+                    ) : (
+                      "Optimize My Resume"
+                    )}
+                  </Button>
+                </div>
+              </CardFooter>
+            </Card>
+          </div>
+          
+          <div>
+            <LoginForm />
+          </div>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Optimize Your Resume</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="resume" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="resume">Resume</TabsTrigger>
+                <TabsTrigger value="job">Job Description</TabsTrigger>
+              </TabsList>
+              <TabsContent value="resume" className="space-y-4">
+                <Textarea
+                  value={resumeText}
+                  onChange={(e) => setResumeText(e.target.value)}
+                  placeholder="Paste your current resume here..."
+                  className="min-h-[300px]"
+                />
+              </TabsContent>
+              <TabsContent value="job" className="space-y-4">
+                <Textarea
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  placeholder="Paste the job description here..."
+                  className="min-h-[300px]"
+                />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter>
+            <div className="w-full space-y-4">
+              <Select value={optimizationOption} onValueChange={setOptimizationOption}>
+                <SelectTrigger>
+                  <SelectValue placeholder="What to optimize?" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">Full Resume Optimization</SelectItem>
+                  <SelectItem value="summary">Professional Summary Only</SelectItem>
+                  <SelectItem value="experience">Work Experience Only</SelectItem>
+                  <SelectItem value="skills">Skills Section Only</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button 
+                className="w-full" 
+                onClick={handleGenerate} 
+                disabled={isLoading || !resumeText || !jobDescription || !apiKey}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Optimizing...
+                  </>
+                ) : (
+                  "Optimize My Resume"
+                )}
+              </Button>
+            </div>
+          </CardFooter>
         </Card>
       )}
     </div>
